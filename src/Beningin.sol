@@ -77,7 +77,7 @@ contract Beningin is ReentrancyGuard, Ownable {
     // mapping (uint256 scriptId => Script script) private s_scripts;
     mapping(address user => mapping (uint256 scriptId => PlayerScript playerScript)) private s_playerScripts;
 
-    Script [] public s_scripts;
+    Script [] private s_scripts;
 
     address private immutable i_rewardToken;
     address private immutable i_nftAddress;
@@ -129,7 +129,6 @@ contract Beningin is ReentrancyGuard, Ownable {
       );
 
       s_scripts.push(script);
-
     }
 
     // Verify that a player has our NFT
@@ -169,6 +168,18 @@ contract Beningin is ReentrancyGuard, Ownable {
     // check if player has script and if it is active
 
 
+  ///////////////////////////
+  // Public view Functions //
+  //////////////////////////
 
+  function getScripts() public view returns (Script[] memory) {
+      Script[] memory scripts = new Script[](s_scripts.length);
+
+      for (uint i = 0; i < s_scripts.length; i++) {
+        scripts[i] = s_scripts[i];
+      }
+
+      return scripts;
+    }
     
 }
