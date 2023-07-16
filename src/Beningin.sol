@@ -59,6 +59,7 @@ contract Beningin is ReentrancyGuard, Ownable {
         uint256 tokenId;
         uint256 lifeSpan;
         uint256 purchaseTimeStamp;
+        uint256 reward;
     }
 
     struct Script {
@@ -69,9 +70,7 @@ contract Beningin is ReentrancyGuard, Ownable {
         uint256 reward;
     }
 
-    uint256 public constant TWENTY_FOUR_HOURS = 86400;
-
-    // mapping (uint256 scriptId => Script script) private s_scripts;
+    uint256 private constant TWENTY_FOUR_HOURS = 86400;
     mapping(address user => mapping(uint256 scriptId => PlayerScript playerScript)) private s_playerScripts;
 
     Script[] private s_scripts;
@@ -143,6 +142,8 @@ contract Beningin is ReentrancyGuard, Ownable {
             }
 
             playerScript.lifeSpan = script.lifeSpan;
+            playerScript.purchaseTimeStamp = block.timestamp;
+            playerScript.reward = script.reward;
 
             (bool sent,) = payable(address(this)).call{value: msg.value}("");
 
@@ -154,7 +155,8 @@ contract Beningin is ReentrancyGuard, Ownable {
         } else {
             uint256 lifeSpan = script.lifeSpan;
             uint256 purchaseTimeStamp = block.timestamp;
-            s_playerScripts[msg.sender][scriptId] = PlayerScript(scriptId, tokenId, lifeSpan, purchaseTimeStamp);
+            uint256 reward = script.reward;
+            s_playerScripts[msg.sender][scriptId] = PlayerScript(scriptId, tokenId, lifeSpan, purchaseTimeStamp, reward);
 
             (bool sent,) = payable(address(this)).call{value: msg.value}("");
 
@@ -187,4 +189,37 @@ contract Beningin is ReentrancyGuard, Ownable {
             }
         }
     }
+
+    function calculatePlayerScriptRewards(address player,uint256 scriptId) public view  returns (uint256 rewards) {
+      PlayerScript memory playerScript = s_playerScripts[player][scriptId];
+      
+      uint256 playerReward = playerScript.reward;
+      uint256 duration = calculateDuration(playerScript.lifeSpan);
+
+      uint256 elapsedTimeMinutes = (block.timestamp - duration) / 60;
+
+      if (elapsedTimeMinutes >= duration) {
+        return playerReward;
+      } else {
+        return (playerReward * elapsedTimeMinutes) / duration;
+      }
+    }
+
+
+    /////////////////////////////
+    // Internal pure Functions //
+    ////////////////////////////
+
+    function calculateDuration(uint256 lifeSpan) internal pure returns (uint256) {
+      if (lifeSpan == 96) {
+        return TWENTY_FOUR_HOURS * 4;
+      } else if (lifeSpan == 72) {
+         return TWENTY_FOUR_HOURS * 3;
+      }else if (lifeSpan == 48) {
+         return TWENTY_FOUR_HOURS * 2;
+      } else {
+         return TWENTY_FOUR_HOURS;
+      }
+    }
+
 }
