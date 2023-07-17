@@ -45,6 +45,8 @@ contract Beningin is ReentrancyGuard, Ownable {
     error Beningin__UnclaimedReward();
     error Beningin__BuyScriptUnSuccessful();
     error Beningin__ScriptExist();
+    error Beningin__RewardTransferFailed();
+    error Beningin__RewardNotReady();
 
     /////////////////////
     // State variables //
@@ -168,6 +170,30 @@ contract Beningin is ReentrancyGuard, Ownable {
         }
     }
 
+    function claimRewards(address player, uint256 scriptId) external payable nonReentrant returns (bool) {
+        PlayerScript memory playerScript = s_playerScripts[player][scriptId];
+
+        uint256 playerReward = playerScript.reward * 1e18;
+        uint256 duration = calculateDuration(playerScript.lifeSpan);
+
+        uint256 elapsedTimeMinutes = (block.timestamp - playerScript.purchaseTimeStamp) / 60;
+
+        s_playerScripts[player][scriptId].lifeSpan = 0;
+        s_playerScripts[player][scriptId].reward = 0;
+        s_playerScripts[player][scriptId].purchaseTimeStamp = 0;
+        s_playerScripts[player][scriptId].tokenId = 0;
+
+        if (elapsedTimeMinutes >= duration) {
+            bool success = IERC20(i_rewardToken).transfer(msg.sender, playerReward);
+            if (!success) {
+                revert Beningin__RewardTransferFailed();
+            }
+            return success;
+        } else {
+            revert Beningin__RewardNotReady();
+        }
+    }
+
     ///////////////////////////
     // Public view Functions //
     //////////////////////////
@@ -190,36 +216,34 @@ contract Beningin is ReentrancyGuard, Ownable {
         }
     }
 
-    function calculatePlayerScriptRewards(address player,uint256 scriptId) public view  returns (uint256 rewards) {
-      PlayerScript memory playerScript = s_playerScripts[player][scriptId];
-      
-      uint256 playerReward = playerScript.reward;
-      uint256 duration = calculateDuration(playerScript.lifeSpan);
+    function calculatePlayerScriptRewards(address player, uint256 scriptId) public view returns (uint256 rewards) {
+        PlayerScript memory playerScript = s_playerScripts[player][scriptId];
 
-      uint256 elapsedTimeMinutes = (block.timestamp - duration) / 60;
+        uint256 playerReward = playerScript.reward;
+        uint256 duration = calculateDuration(playerScript.lifeSpan);
 
-      if (elapsedTimeMinutes >= duration) {
-        return playerReward;
-      } else {
-        return (playerReward * elapsedTimeMinutes) / duration;
-      }
+        uint256 elapsedTimeMinutes = (block.timestamp - playerScript.purchaseTimeStamp) / 60;
+
+        if (elapsedTimeMinutes >= duration) {
+            return playerReward;
+        } else {
+            return (playerReward * elapsedTimeMinutes) / duration;
+        }
     }
-
 
     /////////////////////////////
     // Internal pure Functions //
     ////////////////////////////
 
     function calculateDuration(uint256 lifeSpan) internal pure returns (uint256) {
-      if (lifeSpan == 96) {
-        return TWENTY_FOUR_HOURS * 4;
-      } else if (lifeSpan == 72) {
-         return TWENTY_FOUR_HOURS * 3;
-      }else if (lifeSpan == 48) {
-         return TWENTY_FOUR_HOURS * 2;
-      } else {
-         return TWENTY_FOUR_HOURS;
-      }
+        if (lifeSpan == 96) {
+            return TWENTY_FOUR_HOURS * 4;
+        } else if (lifeSpan == 72) {
+            return TWENTY_FOUR_HOURS * 3;
+        } else if (lifeSpan == 48) {
+            return TWENTY_FOUR_HOURS * 2;
+        } else {
+            return TWENTY_FOUR_HOURS;
+        }
     }
-
 }
