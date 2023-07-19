@@ -47,6 +47,7 @@ contract Beningin is ReentrancyGuard, Ownable {
     error Beningin__ScriptExist();
     error Beningin__RewardTransferFailed();
     error Beningin__RewardNotReady();
+    error Beningin__NotAllowedToken();
 
     /////////////////////
     // State variables //
@@ -77,7 +78,7 @@ contract Beningin is ReentrancyGuard, Ownable {
 
     Script[] private s_scripts;
 
-    address private immutable i_rewardToken;
+    address private immutable i_qlipToken;
     address private immutable i_nftAddress;
 
     /////////////////////
@@ -101,11 +102,19 @@ contract Beningin is ReentrancyGuard, Ownable {
         _;
     }
 
+    modifier NotAllowedToken(address token) {
+        
+        if (token != address(i_qlipToken)) {
+            revert Beningin__NotAllowedToken();
+        }
+        _;
+    }
+
     /////////////////////
     // Functions       //
     /////////////////////
-    constructor(address _rewardToken, address _nftAddress) {
-        i_rewardToken = _rewardToken;
+    constructor(address _qlipToken, address _nftAddress) {
+        i_qlipToken = _qlipToken;
         i_nftAddress = _nftAddress;
     }
 
@@ -126,16 +135,15 @@ contract Beningin is ReentrancyGuard, Ownable {
 
     // Verify that a player has our NFT
     // buy scripts
-    function buyScript(uint256 tokenId, uint256 scriptId) external payable nonReentrant hasNft(tokenId) {
+    function buyScript(uint256 tokenId, uint256 scriptId, address token) external payable nonReentrant hasNft(tokenId) NotAllowedToken(token) {
         // Find script
         Script memory script = getScript(scriptId);
-        // Check if msg.value equal script amount
-        if (msg.value != script.price) {
-            revert Beningin__NotEqualScriptPrice();
-        }
 
         // check if user already has the script
         PlayerScript storage playerScript = s_playerScripts[msg.sender][scriptId];
+
+        // Script Amount
+        uint256 amount = script.price * 1e18;
 
         if (playerScript.scriptId == scriptId) {
             // check if user has unclaimed rewards
@@ -147,9 +155,9 @@ contract Beningin is ReentrancyGuard, Ownable {
             playerScript.purchaseTimeStamp = block.timestamp;
             playerScript.reward = script.reward;
 
-            (bool sent,) = payable(address(this)).call{value: msg.value}("");
+            bool success = IERC20(i_qlipToken).transferFrom(msg.sender, address(this), amount);
 
-            if (!sent) {
+            if (!success) {
                 revert Beningin__BuyScriptUnSuccessful();
             }
 
@@ -160,9 +168,9 @@ contract Beningin is ReentrancyGuard, Ownable {
             uint256 reward = script.reward;
             s_playerScripts[msg.sender][scriptId] = PlayerScript(scriptId, tokenId, lifeSpan, purchaseTimeStamp, reward);
 
-            (bool sent,) = payable(address(this)).call{value: msg.value}("");
+            bool success = IERC20(i_qlipToken).transferFrom(msg.sender, address(this), amount);
 
-            if (!sent) {
+            if (!success) {
                 revert Beningin__BuyScriptUnSuccessful();
             }
 
@@ -184,7 +192,7 @@ contract Beningin is ReentrancyGuard, Ownable {
         s_playerScripts[player][scriptId].tokenId = 0;
 
         if (elapsedTimeMinutes >= duration) {
-            bool success = IERC20(i_rewardToken).transfer(msg.sender, playerReward);
+            bool success = IERC20(i_qlipToken).transfer(msg.sender, playerReward);
             if (!success) {
                 revert Beningin__RewardTransferFailed();
             }
